@@ -7,6 +7,7 @@ from subprocess import PIPE, Popen
 from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
+from netifaces import ifaddresses, AF_INET
 
 cpu_temps = []
 factor = 1.0  # Smaller numbers adjust temp down, vice versa
@@ -18,6 +19,15 @@ hum_baseline = 40.0
 # This sets the balance between humidity and gas reading in the
 # calculation of air_quality_score (25:75, humidity:gas)
 hum_weighting = 0.25
+
+def get_ip_address(interface_name):
+    try:
+        ip_address = [
+                i["addr"] for i in ifaddresses(interface_name).setdefault(AF_INET, [{"addr", "no ip"}])
+        ][0]
+    except ValueError:
+        ip_address = "no IP"
+    return ip_address
 
 def get_cpu_temperature():
     process = Popen(['vcgencmd', 'measure_temp'], stdout=PIPE)
@@ -116,14 +126,17 @@ WIDTH = disp.width
 HEIGHT = disp.height
 # Font, I'm using Roboto Mono from Google https://fonts.google.com/specimen/Roboto+Mono
 FONT_TO_USE = "/usr/share/fonts/truetype/RobotoMono/RobotoMono-Medium.ttf"
+FONT_SIZE = 24
+# Network interface
+NETWORK_INTERFACE = "wlan0"
 
 img = Image.new('RGB', (WIDTH, HEIGHT), color=(0, 0, 0))
 draw = ImageDraw.Draw(img)
-font = ImageFont.truetype(FONT_TO_USE, 24)
-size_x, size_y = draw.textsize("", font)
+font = ImageFont.truetype(FONT_TO_USE, FONT_SIZE)
+size_x, size_y = draw.textsize("M", font)
 
 text_x = 0
-text_y = (80 - size_y) // 2
+text_y = int(size_y/ 2)
 
 # Display message while getting gas baseline
 draw.rectangle((0, 0, disp.width, 80), (0, 0, 0))
@@ -138,7 +151,8 @@ while True:
         humidity_str = "Hum: {:.2f} %RH".format(sensor.data.humidity)
         pressure_str = "Prs: {:.2f} hPa".format(sensor.data.pressure)
         air_quality_score_str = "Air: {:.2f}".format(get_air_quality_score(gas_baseline))
-        msg = "{0}\n{1}\n{2}\n{3}".format(temperature_str, humidity_str, pressure_str, air_quality_score_str)
+        ip_addr_str = "IP: {0}".format(get_ip_address(NETWORK_INTERFACE))
+        msg = "{0}\n{1}\n{2}\n{3}\n{4}".format(ip_addr_str, temperature_str, humidity_str, pressure_str, air_quality_score_str)
         draw.rectangle((0, 0, WIDTH, HEIGHT), (0, 0, 0))
         draw.text((text_x, text_y), msg, font=font, fill=(0, 255, 0))
         disp.display(img)
